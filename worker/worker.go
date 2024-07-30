@@ -54,6 +54,16 @@ func (n *AsukaWorker) NodeJoin(params swarm.JoinRequest) error {
 	return nil
 }
 
+func (n *AsukaWorker) NodeInfo() (*swarm.Swarm, error) {
+
+	sw, err := n.client.SwarmInspect(n.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sw, nil
+}
+
 func (n *AsukaWorker) GetNodeToken(role string) (*string, error) {
 
 	swarmInfo, err := n.client.SwarmInspect(n.ctx)

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"testing"
@@ -10,6 +11,55 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
 )
+
+func TestInspectSwarm(t *testing.T) {
+	cli, err := client.NewClientWithOpts(client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Failed to create Docker client: %v", err)
+	}
+
+	w := NewAsukaWorker(cli, context.Background())
+
+	sw, err := w.NodeInfo()
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+
+	json, err := json.Marshal(&sw)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+
+	t.Logf("Swarm: %v", string(json))
+
+	token, err := w.GetNodeToken("manager")
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+
+	t.Logf("Token: %v", *token)
+}
+
+func TestInitSwarm(t *testing.T) {
+
+	cli, err := client.NewClientWithOpts(client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Failed to create Docker client: %v", err)
+	}
+
+	w := NewAsukaWorker(cli, context.Background())
+
+	res, err := w.NodeInit(swarm.InitRequest{
+		ListenAddr:      ":2000",
+		ForceNewCluster: true,
+	})
+
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+
+	t.Logf("Token: %v", *res)
+}
 
 func TestSwarmStop(t *testing.T) {
 	// Create a new Docker client
@@ -28,7 +78,6 @@ func TestSwarmStop(t *testing.T) {
 		}
 	}
 
-	// cli.ServiceLogs(context.Background(), )
 }
 
 func TestSwarm(t *testing.T) {
@@ -39,8 +88,10 @@ func TestSwarm(t *testing.T) {
 		log.Fatalf("Failed to create Docker client: %v", err)
 	}
 
+	node := NewAsukaWorker(cli, context.Background())
+
 	// Define the service
-	serviceName := "my-service"
+	serviceName := "local-proxy"
 	image := "nginx:latest" // Replace with your desired image
 
 	serviceSpec := swarm.ServiceSpec{
@@ -62,19 +113,20 @@ func TestSwarm(t *testing.T) {
 				{
 					TargetPort:    80,
 					PublishedPort: 8080,
-					PublishMode:   "Ingress",
+					PublishMode:   "Host",
 				},
 			},
 		},
 	}
 
 	// Create the service
-	serviceCreateResp, err := cli.ServiceCreate(context.Background(), serviceSpec, types.ServiceCreateOptions{})
+	// serviceCreateResp, err := cli.ServiceCreate(context.Background(), serviceSpec, types.ServiceCreateOptions{})
+	serviceCreateResp, err := node.CreateWorkerServices(serviceSpec, types.ServiceCreateOptions{})
 	if err != nil {
 		log.Fatalf("Failed to create service: %v", err)
 	}
 
-	fmt.Printf("Service created with ID: %s\n", serviceCreateResp.ID)
+	fmt.Printf("Service created with ID: %s\n", *serviceCreateResp)
 }
 
 func getUint64Pointer(v uint64) *uint64 {
